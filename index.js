@@ -23,7 +23,7 @@ const crawler = async (year) => {
     grand_prix_data.push({ name, href });
   });
 
-  for (let i = 0; i < 1; i++) {
+  for (let i = 0; i < grand_prix_data.length; i++) {
     const { data: html } = await axios.get(
       `${base_url}${grand_prix_data[i].href}`
     );
@@ -40,7 +40,7 @@ const crawler = async (year) => {
       archive_data.push({ name, href });
     });
 
-    for (let j = 0; j < 2; j++) {
+    for (let j = 0; j < archive_data.length; j++) {
       const { data: html } = await axios.get(
         `${base_url}${archive_data[j].href}`
       );
