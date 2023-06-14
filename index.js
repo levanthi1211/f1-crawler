@@ -1,12 +1,16 @@
 const cheerio = require("cheerio");
 const axios = require("axios");
 const fs = require("fs");
+const https = require("https");
+
+const httpsAgent = new https.Agent({ keepAlive: true });
 
 const base_url = "https://www.formula1.com";
 
 const crawler = async (year) => {
   const { data: html } = await axios.get(
-    `${base_url}/en/results.html/${year}/races.html`
+    `${base_url}/en/results.html/${year}/races.html`,
+    { httpsAgent }
   );
   const $ = cheerio.load(html);
   const result = [];
@@ -25,7 +29,8 @@ const crawler = async (year) => {
 
   for (let i = 0; i < grand_prix_data.length; i++) {
     const { data: html } = await axios.get(
-      `${base_url}${grand_prix_data[i].href}`
+      `${base_url}${grand_prix_data[i].href}`,
+      { httpsAgent }
     );
     const $ = cheerio.load(html);
 
@@ -42,7 +47,8 @@ const crawler = async (year) => {
 
     for (let j = 0; j < archive_data.length; j++) {
       const { data: html } = await axios.get(
-        `${base_url}${archive_data[j].href}`
+        `${base_url}${archive_data[j].href}`,
+        { httpsAgent }
       );
       const $ = cheerio.load(html);
 
