@@ -1,6 +1,6 @@
 ## FORMULA 1 CRAWL
 
-This project is a crawler that crawl data from [https://www.formula1.com](https://www.formula1.com").
+This project is a crawler that crawl data from [https://www.formula1.com](https://www.formula1.com).
 This project uses `axios` and `cheerio`
 
 ## Project Status
