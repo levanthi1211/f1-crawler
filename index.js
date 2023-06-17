@@ -7,7 +7,13 @@ const httpsAgent = new https.Agent({ keepAlive: true });
 
 const base_url = "https://www.formula1.com";
 
-const crawler = async (year) => {
+const kebabCase = (string) =>
+  string
+    .replace(/([a-z])([A-Z])/g, "$1-$2")
+    .replace(/[\s_]+/g, "-")
+    .toLowerCase();
+
+const races_crawler = async (year) => {
   const { data: html } = await axios.get(
     `${base_url}/en/results.html/${year}/races.html`,
     { httpsAgent }
@@ -33,28 +39,11 @@ const crawler = async (year) => {
       { httpsAgent }
     );
     const $ = cheerio.load(html);
-
-    const archives = $(".resultsarchive-col-left li:not(:first-child)");
-    const archive_data = [];
-    const archive = {};
-
-    $(archives).each((_, archive) => {
-      const a = $(archive).find("a");
-      const href = a.prop("href");
-      const name = a.text().trim();
-      archive_data.push({ name, href });
-    });
-
-    for (let j = 0; j < archive_data.length; j++) {
-      const { data: html } = await axios.get(
-        `${base_url}${archive_data[j].href}`,
-        { httpsAgent }
-      );
-      const $ = cheerio.load(html);
-
-      const table = $(".resultsarchive-col-right table");
-      const table_data = [];
-
+    const table = $(".resultsarchive-col-right table");
+    const table_data = [];
+    const date = $(".date span.full-date").text().trim();
+    const circuit = $(".date span.circuit-info").text().trim();
+    if (table) {
       const headings = $(table).find("thead tr th:not(.limiter)");
       const heading_data = [];
 
@@ -64,37 +53,89 @@ const crawler = async (year) => {
 
       const rows = $(table).find("tbody tr");
 
-      $(rows).each((i, row) => {
+      $(rows).each((_, row) => {
         const cells = $(row).find("td:not(.limiter)");
         const row_data = {};
         $(cells).each((i, cell) => {
           let content;
           if (i === 2) {
             const first_name = $(cell)
-              .find("span.hide-for-table")
+              .find("span.hide-for-tablet")
               .text()
               .trim();
             const last_name = $(cell)
               .find("span.hide-for-mobile")
               .text()
               .trim();
-            const uppercase = $(cell)
-              .find("span.hide-for-desktop")
-              .text()
-              .trim();
-            content = { first_name, last_name, uppercase };
+            content = `${first_name} ${last_name}`;
+          } else if (i === 0 || i === 1 || i === 4 || i === 6) {
+            content = parseInt($(cell).text().trim());
           } else {
             content = $(cell).text().trim();
           }
-          row_data[heading_data[i]] = content;
+          row_data[heading_data[i].replace(/\//g, "-").toLowerCase()] = content;
         });
-        table_data.push(row_data);
+        table_data.push({
+          ...row_data,
+          driver_name_code: kebabCase(row_data.driver),
+          car_name_code: kebabCase(row_data.car),
+        });
       });
-      archive[archive_data[j].name] = table_data;
     }
+
     result.push({
       grand_prix: grand_prix_data[i].name,
-      ...archive,
+      race_name: `${year} ${grand_prix_data[i].name} GP`,
+      race_name_code: kebabCase(grand_prix_data[i].name),
+      race_results: table_data,
+      date,
+      circuit,
+    });
+  }
+
+  return result;
+};
+
+const driver_crawler = async (year) => {
+  const { data: html } = await axios.get(
+    `${base_url}/en/results.html/${year}/drivers.html`,
+    { httpsAgent }
+  );
+  const $ = cheerio.load(html);
+  const result = [];
+
+  const table = $("table.resultsarchive-table");
+  if (table) {
+    const headings = $(table).find("thead tr th:not(.limiter)");
+    const heading_data = [];
+
+    $(headings).each((_, heading) => {
+      heading_data.push($(heading).text().trim());
+    });
+
+    const rows = $(table).find("tbody tr");
+
+    $(rows).each((_, row) => {
+      const cells = $(row).find("td:not(.limiter)");
+      const row_data = {};
+      $(cells).each((i, cell) => {
+        let content;
+        if (i === 1) {
+          const first_name = $(cell).find("span.hide-for-tablet").text().trim();
+          const last_name = $(cell).find("span.hide-for-mobile").text().trim();
+          content = `${first_name} ${last_name}`;
+        } else if (i === 0 || i === 4) {
+          content = parseInt($(cell).text().trim());
+        } else {
+          content = $(cell).text().trim();
+        }
+        row_data[heading_data[i].replace(/\//g, "-").toLowerCase()] = content;
+      });
+      result.push({
+        ...row_data,
+        driver_name_code: kebabCase(row_data.driver),
+        car_name_code: kebabCase(row_data.car),
+      });
     });
   }
 
@@ -103,14 +144,21 @@ const crawler = async (year) => {
 
 const main = async () => {
   try {
+    const data = [];
     for (let i = 1950; i <= 2023; i++) {
-      const data = await crawler(i);
-
-      fs.writeFile(`data/${i}.json`, JSON.stringify(data), (error) => {
-        if (error) console.log(error);
-        console.log(`Save file ${i} from f1 data year ${i} successfully`);
+      console.log(`Progress: ${i - 1950}/${2023 - 1950}`);
+      const result = await races_crawler(i);
+      const drivers = await driver_crawler(i);
+      data.push({
+        year: i,
+        result,
+        drivers,
       });
     }
+    fs.writeFile(`data.json`, JSON.stringify(data), (error) => {
+      if (error) console.log(error);
+      console.log(`Save file successfully`);
+    });
   } catch (error) {
     throw error;
   }
